@@ -1,0 +1,195 @@
+{% extends 'accounts/base.html' %}
+
+{% block todo_list_head %}active{% endblock %}
+
+{% block title %}Todo List{% endblock %}
+
+{% block style %}
+<style>
+    .todo-list {
+        list-style: none;
+    }
+    .completed {
+        display: none!important;
+    }
+    .connectedSortable {
+        padding-left: 0!important;
+        min-height: 38px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h2>Todo List</h2>
+    <button id="toggleCompletedButton" class="btn btn-primary">完了済みのTodo</button>
+
+    {% for user_obj in user_list %}
+        <h4>{% if user_obj %}{{ user_obj }}{% else %}未分類{% endif %}</h4>
+        <ul class="todo-list connectedSortable" data-user-id="{{ user_obj.id }}">
+            {% for todo in todo_list %}
+                {% if not user_obj and not todo.user or todo.user == user_obj %}
+                    <li class="list-style-none form-check d-flex align-items-center {% if todo.completed %}completed{% endif %}" id="todoListTag{{ todo.id }}" data-todo-id="{{ todo.id }}">
+                        <input type="checkbox" class="form-check-input mt-0 me-2" id="completeCheckbox{{ todo.id }}" {% if todo.completed %}checked{% endif %} onclick="completeTodoItem({{ todo.id }})">
+                        <input type="text" class="form-control todo-text" id="editTextbox{{ todo.id }}" value="{{ todo.title }}" onblur="updateTodoItem({{ todo.id }}, this.value)">
+                    </li>
+                {% endif %}
+            {% endfor %}
+        </ul>
+        <input type="text" class="form-control todo-input" data-user-id="{{ user_obj.id }}" onkeypress="if(event.keyCode === 13) { addTodoItem({{ user_obj.id }}); }"> 
+    {% endfor %}
+</div>
+{% endblock %}
+
+{% block script %}
+<script src="https://code.jquery.com/jquery-3.6.0.js"></script>
+<script src="https://code.jquery.com/ui/1.13.2/jquery-ui.js"></script>
+<script>
+    $( function() {
+        $( ".connectedSortable" ).sortable({
+        connectWith: ".connectedSortable",
+        update: function(event, ui) {
+            const liElement = ui.item[0]; // jQueryのため
+            const ulElement = liElement.parentElement;
+            const todoId = liElement.getAttribute('data-todo-id');
+            const userId = ulElement.getAttribute('data-user-id');
+            socket.send(JSON.stringify({
+                'type': 'move',
+                'user_id': userId,
+                'todo_id': todoId
+            }));
+        }
+        }).disableSelection();
+    } );
+
+    const toggleButton = document.getElementById('toggleCompletedButton');
+    toggleButton.addEventListener('click', function() {
+        const completedItems = document.querySelectorAll('.todo-list .completed');
+        const incompleteItems = document.querySelectorAll('.todo-list li:not(.completed)');
+        const inputElements = document.querySelectorAll('.todo-input')
+        completedItems.forEach(function(item) {
+            item.classList.toggle('completed'); // d-noneクラスを切り替えて表示または非表示を切り替える
+        });
+        incompleteItems.forEach(function(item) {
+            item.classList.toggle('completed');
+        });
+        inputElements.forEach(function(element) {
+            element.classList.toggle('d-none')
+        })
+        // ボタンのテキストを切り替える
+        if (toggleButton.textContent === "未完了のToDo") {
+            toggleButton.textContent = "完了済みのToDo";
+        } else {
+            toggleButton.textContent = "未完了のToDo";
+        }
+    });
+
+    // グローバル変数としてnewTodoIdを宣言し、初期値を設定する
+    let newTodoId = {{ next_todo_id }};
+
+    // WebSocket接続を確立
+    const socket = new WebSocket('ws://localhost:8000/ws/todos/');
+
+    socket.onmessage = function(event) {
+        const data = JSON.parse(event.data);
+        if (data.type == 'add') {
+            const userId = data.user_id ? data.user_id : null; // userIdを取得する
+            const todoItem = data.title;
+            const TodoId = newTodoId; // newIdを固定する
+
+            // data.user.idが存在するかどうかをチェックして適切な<ul>要素を取得する
+            const todoList = userId ? document.querySelector(`ul[data-user-id="${userId}"]`) : document.querySelector('ul[data-user-id=""]');
+
+            const newItem = document.createElement('li');
+            newItem.className = "list-style-none form-check d-flex align-items-center";
+            newItem.id = "todoListTag" + TodoId;
+            newItem.setAttribute('data-todo-id', TodoId);
+
+            const checkbox = document.createElement('input');
+            checkbox.type = "checkbox";
+            checkbox.className = "form-check-input mt-0 me-2";
+            checkbox.id = "completeCheckbox" + TodoId;
+            checkbox.addEventListener('click', function() {
+                completeTodoItem(TodoId);
+            });
+
+            const textbox = document.createElement('input');
+            textbox.type = "text";
+            textbox.className = "form-control todo-text";
+            textbox.id = "editTextbox" + TodoId;
+            textbox.value = data.title; // ToDoアイテムのタイトルをここに設定する必要があります
+            textbox.addEventListener('blur', function() {
+                updateTodoItem(TodoId, textbox.value);
+            });
+
+            newItem.appendChild(checkbox);
+            newItem.appendChild(textbox);
+
+            todoList.appendChild(newItem);
+
+            // newTodoIdをインクリメントする
+            newTodoId++;
+
+  
+        } else if (data.type == 'complete') {
+            const todoId = data.todo_id;
+            const todoListTag = document.getElementById('todoListTag' + todoId);
+            todoListTag.classList.toggle('completed');
+            const checkbox = document.getElementById('completeCheckbox' + todoId);
+            checkbox.checked = !checkbox.checked;
+
+        } else if (data.type == 'edit') {
+            const todoId = data.todo_id;
+            const textbox = document.getElementById('editTextbox' + todoId)
+            textbox.value = data.title
+
+        } else if (data.type == 'move') {
+            const todoId = data.todo_id;
+            const userId = data.user_id;
+            const todoListItem = document.getElementById('todoListTag' + todoId);
+            const destinationList = document.querySelector('.todo-list[data-user-id="' + userId + '"]');
+            todoListItem.remove();
+            destinationList.appendChild(todoListItem);  
+        };
+    };
+
+    // ToDoアイテムの追加などのアクションを行う関数
+    function addTodoItem(userId) {
+        const todoInput = userId ? document.querySelector(`.todo-input[data-user-id="${userId}"]`) : document.querySelector('.todo-input[data-user-id=""]');
+        const todoItem = todoInput.value;
+        // サーバーにメッセージを送信
+        socket.send(JSON.stringify({
+            'type': 'add',
+            'title': todoItem,
+            'user_id': userId,
+            'todo_id': newTodoId
+        }));
+        // 入力フィールドをクリア
+        todoInput.value = '';
+    }
+
+    function completeTodoItem(todoId) {
+        console.log(todoId);
+        const checkbox = document.getElementById('completeCheckbox' + todoId);
+        const completed = checkbox.checked;
+
+        // WebSocketを使用してサーバーにToDoアイテムの完了状態を送信する
+        const message = {
+            'type': 'complete',
+            'todo_id': todoId,
+            'completed': completed
+        };
+        socket.send(JSON.stringify(message));
+        checkbox.checked = !checkbox.checked;
+    }
+
+    function updateTodoItem(todoId, title) {
+    // サーバーに更新したToDoアイテムを送信する
+        socket.send(JSON.stringify({
+            'type': 'edit',
+            'todo_id': todoId,
+            'title': title
+        }));
+    }; 
+</script>
+{% endblock %}
