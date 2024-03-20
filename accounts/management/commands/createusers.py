@@ -17,9 +17,12 @@ class Command(BaseCommand):
                 )
                 user.set_password('detteiu')
                 user.save()
+            
+            if not CustomUser.objects.exists():
 
-            create_user('yuto', '清水', '優人')
-            create_user('haruki', '泥谷', '陽輝')
-            create_user('keito', '藤尾', '景虎')
+                create_user('yuto', '清水', '優人')
+                create_user('haruki', '泥谷', '陽輝')
+                create_user('keito', '藤尾', '景虎')
 
-            self.stdout.write(self.style.SUCCESS('全てのユーザーの作成が終了しました'))
+                self.stdout.write(self.style.SUCCESS('全てのユーザーの作成が終了しました'))
+            

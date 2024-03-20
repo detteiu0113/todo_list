@@ -88,7 +88,7 @@
     let newTodoId = {{ next_todo_id }};
 
     // WebSocket接続を確立
-    const socket = new WebSocket('ws://localhost:8000/ws/todos/');
+    const socket = new WebSocket('ws://127.0.0.1:80/ws/todos/');
 
     socket.onmessage = function(event) {
         const data = JSON.parse(event.data);
