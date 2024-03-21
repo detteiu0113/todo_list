@@ -3,6 +3,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import models
 from .models import TodoItem
 from accounts.models import CustomUser
+import os
 
 class TodoListView(LoginRequiredMixin, ListView):
     model = TodoItem
@@ -15,6 +16,8 @@ class TodoListView(LoginRequiredMixin, ListView):
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+
+        context['HOST_IP'] = os.environ.get('HOST_IP')
         
         # 0は未分類用
         context['user_list'] = [0] + list(CustomUser.objects.all())
