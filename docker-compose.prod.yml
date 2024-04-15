@@ -39,9 +39,9 @@ services:
       - ./static:/static
     networks:
       - webnet
-    # ローカルの80番ボートをコンテナの80番ポートとつなぐ
+    # ローカルの81番ボートをコンテナの80番ポートとつなぐ
     ports:
-      - "80:80"
+      - "81:80"
     # 先にappを起動してからwebを起動する
     depends_on:
       - app
